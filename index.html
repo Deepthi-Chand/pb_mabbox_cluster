@@ -25,7 +25,9 @@ zoom: 9 // starting zoom
 
 this.currentMarkers = {};
 
-addReports("Jakarta","Jakarta", map, true);
+map.on('load', function() {
+  addReports("Jakarta","Jakarta", map, true);
+});
 
 function addReports(cityName, cityRegion, map, togglePane) {
     let self = this;
@@ -53,7 +55,7 @@ function addReportsClustered(endPoint, cityName, map, togglePane) {
             this.addCluster(data, cityName, map, togglePane, 'volcano');
             this.addCluster(data, cityName, map, togglePane, 'wind');
             this.addCluster(data, cityName, map, togglePane, 'earthquake', 'structure');
-            this.addCluster(data, cityName, map, togglePane, 'earthquake', 'road');
+            
             resolve(data);
           }
         }).catch(() => reject(null));
