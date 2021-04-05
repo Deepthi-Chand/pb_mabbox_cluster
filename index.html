@@ -131,10 +131,12 @@ function updateMarkerIcons(map, disaster) {
     var features = [];
 
     for (var i = 0; i < originalFeatures.length; i++) {
-      if(originalFeatures[i].properties.cluster && !clusterIDs.includes(originalFeatures[i].id)) {
-        features.push(originalFeatures[i]);
-        clusterIDs.push(originalFeatures[i].id);
-      }
+      if(originalFeatures[i].properties.cluster) {
+        if (! clusterIDs.includes(originalFeatures[i].id)) {
+          features.push(originalFeatures[i]);
+          clusterIDs.push(originalFeatures[i].id);
+        }
+      } else { features.push(originalFeatures[i]); }
     }
 
     var newMarkers = {};
