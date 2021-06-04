@@ -40,7 +40,7 @@
             center: latlng,
             zoom: 8,
             minZoom: 5,
-            maxZoom: 10,
+            maxZoom: 18,
             zoomSnap: 0.25
         });
         L.tileLayer("https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/256/{z}/{x}/{y}?access_token=pk.eyJ1IjoicGV0YWJlbmNhbmEiLCJhIjoiY2s2MjF1cnZmMDlxdzNscWc5MGVoMTRkeCJ9.PGcoQqU6lBrcLfBmvTrWrQ", {
@@ -434,7 +434,7 @@
                 html: '<i class="icon-map-bg bg-circle ' + type + ' selected"><i class="icon-' + type + ' report-icon"></i>'
             }),
             report_selected_with_url: (type, level) => L.icon({
-                iconUrl: 'assets/onselect/' + type + '_' + level + '_select.svg',
+                iconUrl: 'assets/' + type + '_' + level + '_select.svg',
                 iconSize: [30, 30],
                 iconAnchor: [15, 15]
             }),
