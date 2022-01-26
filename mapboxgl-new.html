@@ -24,10 +24,10 @@
 <body>
 <div id="map"></div>
 <script>
-    mapboxgl.accessToken = 'pk.eyJ1IjoiZW9wb3hmIiwiYSI6ImNqbW9waHY2ajE3MWozcHA1NnFnYmlhaTUifQ.VgwfNzQvItNiv-iMCbFx1w';
+    mapboxgl.accessToken = 'pk.eyJ1IjoicGV0YWJlbmNhbmEiLCJhIjoiY2s2MjF1cnZmMDlxdzNscWc5MGVoMTRkeCJ9.PGcoQqU6lBrcLfBmvTrWrQ';
     var map = new mapboxgl.Map({
         container: 'map', // container id
-        style: 'mapbox://styles/mapbox/streets-v11', // style URL
+        style: 'mapbox://styles/petabencana/ckq0nc6hp01vw17p9n17yxue2', // style URL
         center: [106.834075859, -6.19875625864], // starting position [lng, lat]
         zoom: 9 // starting zoom
     });
@@ -160,7 +160,6 @@
                     });
                 }
             );
-
         });
         map.loadImage('image.png', function (error, image) {
             if (error) throw error;
