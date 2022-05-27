@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8"/>
+    <title>PetaBencana clustering sample</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no"/>
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.6.1/mapbox-gl.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.4.2/jquery.min.js"></script>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.6.1/mapbox-gl.css" rel="stylesheet"/>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+<div id="map"></div>
+<script>
+  mapboxgl.accessToken = 'pk.eyJ1IjoicGV0YWJlbmNhbmEiLCJhIjoiY2s2MjF1cnZmMDlxdzNscWc5MGVoMTRkeCJ9.PGcoQqU6lBrcLfBmvTrWrQ';
+  var map = new mapboxgl.Map({
+    container: 'map', // container id
+    style: 'mapbox://styles/petabencana/ckq0nc6hp01vw17p9n17yxue2', // style URL
+    center: [106.834075859, -6.19875625864], // starting position [lng, lat]
+    zoom: 9 // starting zoom
+  });
+
+  this.currentMarkers = {};
+
+  map.on('load', function () {
+    addReports("Jakarta", "Jakarta", map, true);
+  });
+
+  function addReports(cityName, cityRegion, map, togglePane) {
+    let self = this;
+    if (self.reports) {
+      map.removeLayer(self.reports);
+      self.reports = null;
+    }
+    let endPoint = 'reports/?city=' + cityRegion;
+
+    return this.addReportsClustered(endPoint, cityName, map, togglePane);
+  }
+
+  function addReportsClustered(endPoint, cityName, map, togglePane) {
+    return new Promise((resolve, reject) => {
+      this.getData(endPoint)
+        .then(data => {
+          if (!data) {
+            // console.log('Could not load map layer');
+            resolve(data);
+          } else {
+            this.addCluster(data, cityName, map, togglePane, 'flood');
+            addDisasterIconLayers('flood', map);
+
+            // this.addCluster(data, cityName, map, togglePane, 'fire');
+            // this.addCluster(data, cityName, map, togglePane, 'haze');
+            // this.addCluster(data, cityName, map, togglePane, 'volcano');
+            // this.addCluster(data, cityName, map, togglePane, 'wind');
+            // this.addCluster(data, cityName, map, togglePane, 'earthquake', 'structure');
+
+            resolve(data);
+          }
+        }).catch(() => reject(null));
+    });
+  }
+
+  function add_icon_layer(map, image_name, layer_id, source, filter, icon_size) {
+    map.loadImage(image_name, function (error, image) {
+      if (error) throw error;
+      let image_code = image_name.split('/').slice(-1)[0].split('.')[0];
+      map.addImage(image_code, image);
+      map.addLayer({
+        'id': layer_id,
+        'type': 'symbol',
+        'source': source,
+        filter: filter,
+        'layout': {
+          'icon-image': image_code,
+          'icon-size': icon_size,
+        }
+      });
+    });
+  }
+
+  function addDisasterIconLayers(disaster, map) {
+    let iconMap = {
+      "flood": [
+        {
+          "icon": "assets/flood_low.png",
+          "filter": ['<=', 'flood_depth', 70],
+          "size": 0.05,
+          "level": "low"
+        },
+        {
+          "icon": "assets/flood_medium.png",
+          "filter": ['all', ['<=', 'flood_depth', 150], ['>', 'flood_depth', 70]],
+          "size": 0.05,
+          "level": "medium"
+        },
+        {
+          "icon": "assets/flood_high.png",
+          "filter": ['all', ['>', 'flood_depth', 150]],
+          "size": 0.05,
+          "level": "high"
+        }
+      ]
+    }
+    Object.keys(iconMap).forEach(function (disaster) {
+      iconMap[disaster].forEach(function (icon) {
+        add_icon_layer(map, icon.icon, disaster + '_' + icon.level, disaster, icon.filter, icon.size);
+      });
+    });
+  }
+
+  function addCluster(data, cityName, map, togglePane, disaster, reportType) {
+    let reports = data
+    console.log(reports);
+    reports.features = data.features.filter(feature => {
+      if (reportType) {
+        let reportData = feature.properties.report_data || {'report_type': ''};
+        return reportData.report_type === reportType;
+      }
+      return feature.properties.disaster_type === disaster;
+    })
+
+    map.addSource(disaster, {
+      'type': 'geojson',
+      'data': reports,
+      'cluster': true,
+      'clusterMaxZoom': 14
+    });
+
+    map.addLayer({
+      'id': 'cluster-' + disaster,
+      'source': disaster,
+      'type': 'circle'
+    });
+
+    map.on('click', 'cluster-' + disaster, function (e) {
+      console.log("clicked")
+      var features = map.queryRenderedFeatures(e.point, {
+        layers: ['cluster-' + disaster]
+      });
+      var clusterId = features[0].properties.cluster_id;
+      map.getSource(disaster).getClusterExpansionZoom(
+        clusterId,
+        function (err, zoom) {
+          if (err) return;
+          map.easeTo({
+            center: features[0].geometry.coordinates,
+            zoom: zoom
+          });
+        }
+      );
+    });
+    map.loadImage('image.png', function (error, image) {
+      if (error) throw error;
+      map.addImage('marker', image);
+      map.addLayer({
+        'id': 'cluster-count-' + disaster,
+        'type': 'symbol',
+        'source': disaster,
+        filter: ['has', 'point_count'],
+        'layout': {
+          'icon-image': 'marker',
+          'icon-size': 0.45,
+          'text-field': '{point_count}',
+          'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
+          'text-size': 12
+        }
+      });
+    });
+
+    map.on('mouseenter', 'cluster-' + disaster, function () {
+      map.getCanvas().style.cursor = 'pointer';
+    });
+    map.on('mouseleave', 'cluster-' + disaster, function () {
+      map.getCanvas().style.cursor = '';
+    });
+
+  }
+
+  function getData(endPoint) {
+    return new Promise((resolve, reject) => {
+      data = {
+        type: "FeatureCollection",
+        features: [
+          {
+            type: "Feature",
+            geometry: {
+              type: "Point",
+              coordinates: [106.8397665024, -6.1751155028],
+            },
+            properties: {
+              pkey: "184076",
+              created_at: "2021-02-15T09:30:17.847Z",
+              source: "grasp",
+              status: "confirmed",
+              url: "d6b94b28-a06c-46f8-a63d-00fb15bfd935",
+              image_url: null,
+              disaster_type: "flood",
+              flood_depth: 105,
+              report_data: {
+                report_type: "flood",
+                flood_depth: 105,
+              },
+              tags: {
+                district_id: "3173",
+                local_area_id: "757",
+                instance_region_code: "ID-JK",
+              },
+              title: null,
+              text: "test",
+            },
+          },
+          {
+            type: "Feature",
+            geometry: {
+              type: "Point",
+              coordinates: [106.8377923965, -6.1751368468],
+            },
+            properties: {
+              pkey: "184075",
+              created_at: "2021-02-15T09:29:42.768Z",
+              source: "grasp",
+              status: "confirmed",
+              url: "965717c1-8133-42d1-bac6-239d86771b66",
+              image_url: null,
+              disaster_type: "flood",
+              flood_depth: 10,
+              report_data: {
+                report_type: "flood",
+              },
+              tags: {
+                district_id: "3173",
+                local_area_id: "756",
+                instance_region_code: "ID-JK",
+              },
+              title: null,
+              text: "test",
+            },
+          },
+          {
+            type: "Feature",
+            geometry: {
+              type: "Point",
+              coordinates: [106.8103480339, -6.1790729315],
+            },
+            properties: {
+              pkey: "248559",
+              created_at: "2022-05-27T06:20:22.573Z",
+              source: "grasp",
+              status: "confirmed",
+              url: "134ffab2-1409-4a23-a65d-16f15177f931",
+              image_url: null,
+              disaster_type: "flood",
+              flood_depth: 56,
+              report_data: {
+                report_type: "flood",
+              },
+              tags: {
+                district_id: null,
+                local_area_id: "27519",
+                instance_region_code: "ID-JK",
+              },
+              title: null,
+              text: "flood #2",
+              partner_code: null,
+              partner_icon: null,
+            },
+          },
+          {
+            type: "Feature",
+            geometry: {
+              type: "Point",
+              coordinates: [106.8101763725, -6.1787956023],
+            },
+            properties: {
+              pkey: "248558",
+              created_at: "2022-05-27T06:19:13.039Z",
+              source: "grasp",
+              status: "confirmed",
+              url: "356fb11c-3961-4c9d-97f8-4a953abf247f",
+              image_url: null,
+              disaster_type: "flood",
+              flood_depth: 57,
+              report_data: {
+                report_type: "flood",
+              },
+              tags: {
+                district_id: null,
+                local_area_id: "27519",
+                instance_region_code: "ID-JK",
+              },
+              title: null,
+              text: "flood report",
+              partner_code: null,
+              partner_icon: null,
+            },
+          },
+        ],
+      };
+      resolve(data)
+    });
+  }
+
+  function _getWindSevearity(impact) {
+    // eslint-disable-next-line default-case
+    switch (String(impact)) {
+      case '0':
+        return 'normal';
+      case '1':
+        return 'medium';
+      case '2':
+        return 'high';
+    }
+  }
+
+  function _getAQSevearity(aq) {
+    // eslint-disable-next-line default-case
+    switch (String(aq)) {
+      case '0':
+        return 'low';
+      case '1':
+        return 'low';
+      case '2':
+        return 'normal';
+      case '3':
+        return 'high';
+      case '4':
+        return 'high';
+    }
+  }
+
+
+  function _getFloodSevearity(depth) {
+    if (depth <= 70) {
+      return 'low';
+    } else if (depth <= 150) {
+      return 'medium';
+    } else if (depth > 150) {
+      return 'high';
+    }
+  }
+
+  function _getAccessabilitySevearity(accessability) {
+    // eslint-disable-next-line default-case
+    switch (accessability) {
+      case 0:
+        return 'high';
+      case 1:
+        return 'medium';
+      case 2:
+        return 'normal';
+      case 3:
+        return 'normal';
+      case 4:
+        return 'low';
+    }
+  }
+
+  function _getAccessabilitySevearityGroup(accessability) {
+    if (accessability <= 0.5) {
+      return 'high';
+    } else if (accessability > 0.5 && accessability <= 1.0) {
+      return 'medium';
+    } else if (accessability > 1.0 && accessability <= 1.8) {
+      return 'normal';
+    } else if (accessability > 1.8) {
+      return 'low';
+    }
+  }
+
+  function _getStructureFailureSevearity(structureFailure) {
+    if (structureFailure < 1) {
+      return 'low';
+    } else if (structureFailure >= 1 && structureFailure < 2) {
+      return 'medium';
+    } else if (structureFailure >= 2) {
+      return 'high';
+    }
+  }
+
+  function getAvgDisasterSevearity(type, subType, reportMarkers) {
+    switch (type) {
+      case 'flood':
+        let avgDepth = this.getAverageFloodDepth(reportMarkers);
+        return this._getFloodSevearity(avgDepth);
+      case 'earthquake':
+        if (subType === 'road') {
+          let avgAccessability = this.getAverageAccessability(reportMarkers);
+          return this._getAccessabilitySevearityGroup(avgAccessability);
+        } else if (subType === 'structure') {
+          let avgStructureFailure = this.getAvgStructureFailure(reportMarkers);
+          return this._getStructureFailureSevearity(avgStructureFailure);
+        }
+        break;
+      case 'wind':
+        let avgImpact = this.getAverageWindImpact(reportMarkers);
+        return this._getWindSevearity(avgImpact);
+      case 'haze':
+        let avgAirQuality = this.getAverageAirQuality(reportMarkers);
+        return this._getAQSevearity(avgAirQuality);
+      case 'fire':
+        return 'high';
+      default:
+        return 'low';
+    }
+  }
+
+  this.mapIcons = {
+    report_normal_mp: (type, level) => {
+      var el = new Image();
+      el.src = 'assets/' + type + '_' + level + '.svg';
+      el.width = 30;
+      el.height = 30;
+      el.classList.add('mapMarker');
+      return el;
+    },
+
+    disaster_cluster_mb: (disaster, level) => {
+      var el = new Image();
+      el.src = 'assets/' + disaster + '_' + level + '.svg';
+      el.width = 35;
+      el.height = 35;
+      el.classList.add('mapClusterMarker');
+      return el;
+    },
+  };
+
+  function getDisasterClusterIcon(disasterType, subType, level) {
+    switch (disasterType) {
+      case 'flood':
+        return this.mapIcons.disaster_cluster_mb(disasterType, level);
+      case 'earthquake':
+        return this.mapIcons.disaster_cluster_with_url(subType, level);
+      case 'haze':
+      case 'wind':
+      case 'volcano':
+      case 'fire':
+        return this.mapIcons.disaster_cluster_with_url(disasterType, level);
+      default:
+        return this.mapIcons.disaster_cluster_mb(disasterType, level);
+    }
+  }
+
+  function getReportIcon(feature) {
+    let disasterType = feature.properties.disaster_type;
+    let level = 'low';
+    switch (disasterType) {
+      case 'flood':
+        level = this.getDisasterSevearity(feature);
+        return this.mapIcons.report_normal_mp(disasterType, level);
+      case 'prep':
+        let subType = feature.properties.report_data.report_type;
+        return this.mapIcons.report_normal(subType, level);
+      case 'earthquake':
+        let eqSubType = feature.properties.report_data.report_type;
+        level = this.getDisasterSevearity(feature);
+        return this.mapIcons.report_normal_with_url(eqSubType, level);
+      case 'haze':
+      case 'wind':
+      case 'volcano':
+      case 'fire':
+        level = this.getDisasterSevearity(feature);
+        return this.mapIcons.report_normal_with_url(disasterType, level);
+      default:
+        return this.mapIcons.report_normal(disasterType, level);
+    }
+  }
+
+  function getDisasterSevearity(feature) {
+    let disasterType = feature.properties.disaster_type;
+    let level = 'low';
+    let reportData = feature.properties.report_data;
+    switch (disasterType) {
+      case 'flood':
+        reportData = reportData || {'flood_depth': 0};
+        let depth = reportData.flood_depth || 0;
+        level = this._getFloodSevearity(depth);
+        break;
+      case 'earthquake':
+        let subType = feature.properties.report_data.report_type;
+        if (subType === 'road') {
+          reportData = reportData || {'accessabilityFailure': 0};
+          let accessability = reportData.accessabilityFailure || 0;
+          level = this._getAccessabilitySevearity(accessability);
+        } else if (subType === 'structure') {
+          reportData = reportData || {'structureFailure': 0};
+          let structureFailure = reportData.structureFailure || 0;
+          level = this._getStructureFailureSevearity(structureFailure);
+        }
+        break;
+      case 'haze':
+        switch (reportData.airQuality) {
+          case 0:
+            level = 'low';
+            break;
+          case 1:
+            level = 'low';
+            break;
+          case 2:
+            level = 'normal';
+            break;
+          case 3:
+            level = 'high';
+            break;
+          case 4:
+            level = 'high';
+            break;
+          default:
+            level = 'low';
+            break;
+        }
+        break;
+      case 'wind':
+        reportData = reportData || {'impact': 0};
+        let impact = reportData.impact || 0;
+        level = this._getWindSevearity(impact);
+        break;
+      case 'volcano':
+        break;
+      case 'fire':
+        level = 'high';
+        break;
+      default:
+        break;
+    }
+    return level;
+  }
+
+  function getAvgStructureFailure(reportMarkers) {
+    let totalStructureFailure = 0;
+    reportMarkers.forEach(function (report, index) {
+      const reportData = report.properties.report_data || {'structureFailure': 0};
+      totalStructureFailure += reportData.structureFailure || 0;
+    });
+    return totalStructureFailure / reportMarkers.length;
+  }
+
+  function getAverageAccessability(reportMarkers) {
+    let totalAccessability = 0;
+    reportMarkers.forEach(function (report, index) {
+      let accessability = 0;
+      const reportData = report.properties.report_data || {'accessabilityFailure': 0};
+      accessability = reportData.accessabilityFailure || 0;
+      switch (accessability) {
+        case 0:
+          totalAccessability += 0.5;
+          break;
+        case 1:
+          totalAccessability += 1.0;
+          break;
+        case 2:
+          totalAccessability += 1.4;
+          break;
+        case 3:
+          totalAccessability += 1.8;
+          break;
+        case 4:
+          totalAccessability += 2.2;
+          break;
+        default:
+          totalAccessability += 0;
+          break;
+      }
+    });
+    return totalAccessability / reportMarkers.length;
+  }
+
+
+  function getAverageFloodDepth(reportMarkers) {
+    let depth = 0;
+    reportMarkers.forEach(function (report, index) {
+      const reportData = report.properties.report_data || {'flood_depth': 0};
+      depth += reportData.flood_depth || 0;
+    });
+    // for (let report in report_markers) {
+    //   depth += report.feature.properties.report_data['flood_depth'];
+    // }
+    return depth / reportMarkers.length;
+  }
+
+  function getAverageAirQuality(reportMarkers) {
+    let aq = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0};
+    reportMarkers.forEach(function (report, index) {
+      const reportData = report.properties.report_data || {'airQuality': 0};
+      aq[reportData['airQuality']] = aq[reportData['airQuality']] + 1;
+    });
+    return Object.keys(aq).reduce((a, b) => aq[a] > aq[b] ? a : b);
+  }
+
+  function getAverageWindImpact(reportMarkers) {
+    let impact = {0: 0, 1: 0, 2: 0};
+    reportMarkers.forEach(function (report, index) {
+      const reportData = report.properties.report_data || {'impact': 0};
+      impact[reportData['impact']] = impact[reportData['impact']] + 1;
+    });
+    return Object.keys(impact).reduce((a, b) => impact[a] > impact[b] ? a : b);
+  }
+
+</script>
+
+</body>
+</html>
